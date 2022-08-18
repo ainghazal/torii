@@ -29,11 +29,11 @@ type netTest struct {
 }
 
 type options struct {
-	Cipher string
-	Auth   string
-	Ca     string
-	Cert   string
-	Key    string
+	Cipher   string
+	Auth     string
+	SafeCa   string
+	SafeCert string
+	SafeKey  string
 }
 
 var (
@@ -86,14 +86,14 @@ func singleConfig(provider string) *config {
 			Cipher: "AES-256-GCM",
 			Auth:   "SHA512",
 			// TODO pick auth from in-memory store for each provider
-			Ca:   ca,
-			Cert: cert,
-			Key:  key,
+			SafeCa:   ca,
+			SafeCert: cert,
+			SafeKey:  key,
 		},
 	}
 	return &config{
 		Name:        fmt.Sprintf("openvpn-%s", provider),
-		Description: fmt.Sprintf("measure vpn connection to %s gateways", provider),
+		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider),
 		Author:      authorName,
 		NetTests:    []netTest{test},
 	}
@@ -108,6 +108,6 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	initProviderRemotes()
 	router := mux.NewRouter().StrictSlash(false)
-	router.HandleFunc("/riseup.json", riseupDescriptor)
+	router.HandleFunc("/vpn/riseup.json", riseupDescriptor)
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
