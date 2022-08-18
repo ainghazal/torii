@@ -1,35 +1,247 @@
 package vpn
 
+import (
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+)
+
 var (
 	riseupName = "riseup"
 )
 
-type RiseupProvider struct{}
+type RiseupProvider struct {
+	endpoints []*Endpoint
+	auth      AuthDetails
+}
 
 func (r *RiseupProvider) Name() string {
 	return riseupName
 }
 
+// Bootstrap implements boostrap method. It will fetch endpoitns from riseup
+// api, and get a fresh certificate.
+// TODO this certificate needs to be refreshed every few days.
 func (r *RiseupProvider) Bootstrap() bool {
+	log.Println("🌱 Bootstrapping Riseup")
+	endp, err := fetchEndpointsFromAPI()
+	if err != nil {
+		log.Println("error parsing endpoints:", err)
+		return false
+	}
+	r.endpoints = endp
+	log.Printf("-- Got %d endpoint combinations\n", len(endp))
+	auth, err := fetchCertificateFromAPI()
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	r.auth = auth
 	return true
 }
 
+// Endpoints returns all the available endpoints.
 func (r *RiseupProvider) Endpoints() []*Endpoint {
-	return []*Endpoint{}
+	if r.endpoints == nil {
+		return []*Endpoint{}
+	}
+	return r.endpoints
 }
 
+// Endpoitns returns Endpoints filtered by country code.
 func (r *RiseupProvider) EndpointByCountry(cc string) []*Endpoint {
 	return nil
 }
 
+// AuthDetails returns valid authentication for this provider.
 func (r *RiseupProvider) Auth() AuthDetails {
-	return riseupAuth
+	return r.auth
 }
 
 var _ Provider = &RiseupProvider{}
 
-var riseupAuth = AuthDetails{
-	Ca:   `base64:LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJZakNDQVFpZ0F3SUJBZ0lCQVRBS0JnZ3Foa2pPUFFRREFqQVhNUlV3RXdZRFZRUURFd3hNUlVGUUlGSnYKYjNRZ1EwRXdIaGNOTWpFeE1UQXlNVGt3TlRNM1doY05Nall4TVRBeU1Ua3hNRE0zV2pBWE1SVXdFd1lEVlFRRApFd3hNUlVGUUlGSnZiM1FnUTBFd1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFReE9YQkd1K2dmCnBqSHpWdGVHVFdMNlhuRnh0RW5LTUZwS2FKa0EvVk9IbUVTem9Mc1pSUXh0ODhHc3N4YXFDMDFKMTdpZFFpcXYKemdOcGVkbXR2RnR5bzBVd1F6QU9CZ05WSFE4QkFmOEVCQU1DQXFRd0VnWURWUjBUQVFIL0JBZ3dCZ0VCL3dJQgpBVEFkQmdOVkhRNEVGZ1FVWmRvVWxKckNJVU5GcnBmZkFxK0xRam53RXo0d0NnWUlLb1pJemowRUF3SURTQUF3ClJRSWdmcjN3NHRuUkcrTmRJM0xzR1Bsc1JrdEdLMjB4SFR6c0Izb3JCMHlDNmNJQ0lRQ0IrLzl5OG5tU1N0Zk4KVlVNVXlrMmhOZDcva0M4bkwyMjJUVEQ3VlpVdHNnPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=`,
-	Key:  `base64:LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBcTBkVlVnMWRLaWFBMDRmcEtycEYzYlZCTEpsbTdoME4rc1ZIZHA2MVZPZG5iQlBPCmtiMHU5TkJqTFZZaFFzbm1HVWp0TzNHeEdGSTltUEdjN3VHN0wwMkk2aWtIKzBhMWpDNGwyWHVGdEFRWm1xNSsKUWxrTTh5M3FUSzB3NlRPZG9IZUh0TitPaEtyemN2eFJuWXR1ZURqekVOaFl5MkE2UHBTM2w2WWg1a1dxMmZabApxcy9UODhRa2dSSWk5YmxTa2s3RGtKcHFDSXRTVE9zS2RraXJVYTU1d1E2N1dUYzB1ZWQ4YVRONk1mWVJOYWZ4ClRld3Zid3RFMWpEN0Y2SzRQRks3eGVMS2NSMVFlRzA4N0JkVS95N2dIR3MxWnArUGdBaHJIREdqOXZlQkRWUnAKM0dLUjhnNitXMWMzMVh4UWdIMEwwRzVmNjRyZVVGb1pZQkZCSXdJREFRQUJBb0lCQUNWRjhzVldieTNiRHpINQpZNzZPcHVHbXJqWThjKy9obHNjNTQyRm5ER01ic0tBT2QyZXoyZUlnNzFSUWFCQ1d5Mkk1UXBjckdMVUlRS3RsCitSYnJQTWNBZ29raXdML29GVjRhTk5adFVSMXB2d0N3ZEgyUHo0ZWtPRmJUWWM5K0VoRjNzYXFrOCtqZkl2ZWsKL1VYaHIvcXR1Z2V5YlRCbEVvZkg2V1F4SFROMUhwOUNEc2Y0SWRyMmkrSk53TFJjVzhVZXMvNHZ3WWhsRGsrbwpnNDV4NWtNWmtscUlHVUxHbUhSRjVUY2N2RklWYnZ3UmdIdXZuNlNqNnhDdFJvbi9SZG5LSnJ4R25NU0VGbnJYCjdxOTFRSUFmaldIYm10Tk9TYVl1NW9FejdnbTE1R2JmdmlEVXRUNjR3djJJREF1dUY4S09hOGowUWNvV2NMM28KaHpMenpORUNnWUVBelZsRTgxR3o4NVVYa2VtSEdwaEhIdlc2ZG93dE1xUlVTb3FUMkgwSCthK0RlaExTZEhGUgozUWNKbTBPeGpQMU1MRkZiM016cmhTT1pZTHVsTHFWeDF1eFJwYWo1ak4zRVFHNHBxWmI0cnhCcCs4RHM2RCsxCk5TM1VKb1FOamQxZEplemEzbTVuRkdULzJuMWdCRmI1MmRmNmxibSs2TGtJNFA0R1F4UDR5TmNDZ1lFQTFZYTIKU3R1b3lSWlVSOE1QVnltZnVFNVBTQ2VtRE90bStzQXIvSGRPVXJKdTkyditHa1JYQTdiR0EvTjI0VE5XKzViYQpZRTF5Nk9ZYnM0NklGRUlmOERFWU8zRGJKaTlIeHU2S3hkcXExanFXamZVcGJDY2xrZXZQQk15Q3V6VnRLQWNwCnVNdmhkanpidlFTMzlDTGtNVGQray9maC83ZWVqUHhLRFhMSEJKVUNnWUFNd2tjdWR4MGZQVnhCaktrQVZnWFYKUHA5ZlRrWmdweVUxbkhhak5PR1IrZjNKVC9JVG1oYmtETlBqK2NqR1lkYWh5a3hTNDhpZWRSL0tpdDR3ajhjSworNVAzSHhDaVdBVWhtN2FxK3Q1b3dqUlRtQ0VnTFJVdFFMTzEwTzZtcWVKbndOZTRpbE9OU05rODBoMXRKNXBPCmxzVFRHTDlyNWxOTzUzbXNJVW1MOFFLQmdBeDRBRjhnc3B1RGZVcHZmbzdWZEdrNzBXOWlPVlVaemZxb2pDa0QKQW9UYnZKVWdMa2QwWkN4b1dPblVKc1lCekh1R2xKdjVDZFBGMUNwSkVYTTFaVTRPWDk3Z3VUdGltV3RwZEpzWApLTkMzdlNEdkJ3czB3Z0hpWmtWZWQrZmN0OUlWa1A4a2tMYnAyTjhSem5nb0xYRWVUM3J1aDdqNkRQMG9vbDVrCnJIQjlBb0dCQUtxUERHVU9leVNGeTdiNjQyMnBvTkdGdDV4cHBGME1NQ1lJc3MvdzEzRW81dGxMb0U4OEpvbWwKVHlyMW5GVzZ0dkUvd1crYmZ0RU8rWCt4aDdibzNDNHNIeWpUTXB1WnNob2FXOHRrOFl3ZFI5eTNUV1Vxd3BwaQp2b2U0M0E1LzBuNzE5VFVFZ00vOUtoQVB4RzdQYlZDVDh1azF6a1hmNHZXOUpHUTNaaElDCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg==`,
-	Cert: `base64:LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNlRENDQWg2Z0F3SUJBZ0lSQU9TcHNFNU5jdDcwTDNjdVlhcllidkl3Q2dZSUtvWkl6ajBFQXdJd016RXgKTUM4R0ExVUVBd3dvVEVWQlVDQlNiMjkwSUVOQklDaGpiR2xsYm5RZ1kyVnlkR2xtYVdOaGRHVnpJRzl1YkhraApLVEFlRncweU1qQTRNREV4TVRJek1qSmFGdzB5TWpBNU1EVXhNVEl6TWpKYU1CUXhFakFRQmdOVkJBTVRDVlZPClRFbE5TVlJGUkRDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBS3RIVlZJTlhTb20KZ05PSDZTcTZSZDIxUVN5Wlp1NGREZnJGUjNhZXRWVG5aMndUenBHOUx2VFFZeTFXSVVMSjVobEk3VHR4c1JoUwpQWmp4bk83aHV5OU5pT29wQi90R3RZd3VKZGw3aGJRRUdacXVma0paRFBNdDZreXRNT2t6bmFCM2g3VGZqb1NxCjgzTDhVWjJMYm5nNDh4RFlXTXRnT2o2VXQ1ZW1JZVpGcXRuMlphclAwL1BFSklFU0l2VzVVcEpPdzVDYWFnaUwKVWt6ckNuWklxMUd1ZWNFT3UxazNOTG5uZkdremVqSDJFVFduOFUzc0wyOExSTll3K3hlaXVEeFN1OFhpeW5FZApVSGh0UE93WFZQOHU0QnhyTldhZmo0QUlheHd4by9iM2dRMVVhZHhpa2ZJT3ZsdFhOOVY4VUlCOUM5QnVYK3VLCjNsQmFHV0FSUVNNQ0F3RUFBYU5uTUdVd0RnWURWUjBQQVFIL0JBUURBZ2VBTUJNR0ExVWRKUVFNTUFvR0NDc0cKQVFVRkJ3TUNNQjBHQTFVZERnUVdCQlJ4UEdnSkMyVXBNYzNPb1E5aVdaQlh6eVpJSnpBZkJnTlZIU01FR0RBVwpnQlI5U21MWS95dEp4SG0yb3JIY2pqNWpCMXlvL2pBS0JnZ3Foa2pPUFFRREFnTklBREJGQWlFQXpWRE9SVUNKCnVScHlFVEZSc1BHcFZEeWI5Mi9PRGkyNS9KZ25RbmloZCtZQ0lBSnI1S0MvTjVkZ1JpRDNmRGV1Q3dPZXdWY0EKaWQ3U3JxU1gvRjZZc2g3RgotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==`,
+const (
+	apiURL  = "https://api.black.riseup.net/3/config/eip-service.json"
+	certURL = "https://api.black.riseup.net/3/cert"
+)
+
+func getClient() *http.Client {
+	root := x509.NewCertPool()
+	root.AppendCertsFromPEM(riseupCA)
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false,
+				RootCAs:            root,
+			},
+		},
+	}
+	return client
 }
+
+func doGet(uri string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	if err != nil {
+		return []byte{}, err
+	}
+	resp, err := getClient().Do(req)
+	if err != nil {
+		return []byte{}, err
+	}
+	if resp.StatusCode != 200 {
+		return []byte{}, fmt.Errorf("err code: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
+}
+
+func fetchEndpointsFromAPI() ([]*Endpoint, error) {
+	endp := []*Endpoint{}
+	eipJson, _ := doGet(apiURL)
+	eip := &eipService{}
+	err := json.Unmarshal(eipJson, eip)
+	if err != nil {
+		return endp, err
+	}
+	for _, gw := range eip.Gateways {
+		ipaddr := gw.IPAddress
+		label := gw.Host
+		cc := eip.Locations[gw.Location].CountryCode
+		for _, transport := range gw.Capabilities.Transport {
+			for _, proto := range transport.Protocols {
+				for _, port := range transport.Ports {
+					var obfs string
+					switch transport.Type {
+					case "obfs4":
+						obfs = "obfs4"
+					default:
+						obfs = "none"
+					}
+					e := &Endpoint{
+						Label:       label,
+						IP:          ipaddr,
+						Port:        port,
+						Proto:       "openvpn",
+						Transport:   proto, // the semantics are switched here
+						CountryCode: cc,
+						Obfuscation: obfs,
+					}
+					endp = append(endp, e)
+				}
+			}
+		}
+	}
+	return endp, nil
+}
+
+func fetchCertificateFromAPI() (AuthDetails, error) {
+	cert, err := doGet(certURL)
+	if err != nil {
+		return AuthDetails{}, err
+	}
+	key, crt, err := splitCombinedPEM(cert)
+	if err != nil {
+		return AuthDetails{}, err
+	}
+	auth := AuthDetails{
+		Key:  string(toBase64(key)),
+		Cert: string(toBase64(crt)),
+		Ca:   string(toBase64(riseupVPNCA)),
+	}
+	return auth, nil
+}
+
+//
+// Data structures to parse Riseup VPN API
+//
+
+type eipService struct {
+	Gateways             []gateway
+	Locations            map[string]Location
+	OpenvpnConfiguration openvpnConfig `json:"openvpn_configuration"`
+}
+
+type openvpnConfig map[string]interface{}
+
+type gateway struct {
+	Capabilities struct {
+		Transport []transport
+	}
+	Host      string
+	IPAddress string `json:"ip_address"`
+	Location  string
+}
+
+type Location struct {
+	CountryCode string `json:"country_code"`
+	Hemisphere  string
+	Name        string
+	Timezone    string
+}
+
+type transport struct {
+	Type      string
+	Protocols []string
+	Ports     []string
+	Options   map[string]string
+}
+
+var riseupCA = []byte(`
+-----BEGIN CERTIFICATE-----
+MIIFjTCCA3WgAwIBAgIBATANBgkqhkiG9w0BAQ0FADBZMRgwFgYDVQQKDA9SaXNl
+dXAgTmV0d29ya3MxGzAZBgNVBAsMEmh0dHBzOi8vcmlzZXVwLm5ldDEgMB4GA1UE
+AwwXUmlzZXVwIE5ldHdvcmtzIFJvb3QgQ0EwHhcNMTQwNDI4MDAwMDAwWhcNMjQw
+NDI4MDAwMDAwWjBZMRgwFgYDVQQKDA9SaXNldXAgTmV0d29ya3MxGzAZBgNVBAsM
+Emh0dHBzOi8vcmlzZXVwLm5ldDEgMB4GA1UEAwwXUmlzZXVwIE5ldHdvcmtzIFJv
+b3QgQ0EwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQC76J4ciMJ8Sg0m
+TP7DF2DT9zNe0Csk4myoMFC57rfJeqsAlJCv1XMzBmXrw8wq/9z7XHv6n/0sWU7a
+7cF2hLR33ktjwODlx7vorU39/lXLndo492ZBhXQtG1INMShyv+nlmzO6GT7ESfNE
+LliFitEzwIegpMqxCIHXFuobGSCWF4N0qLHkq/SYUMoOJ96O3hmPSl1kFDRMtWXY
+iw1SEKjUvpyDJpVs3NGxeLCaA7bAWhDY5s5Yb2fA1o8ICAqhowurowJpW7n5ZuLK
+5VNTlNy6nZpkjt1QycYvNycffyPOFm/Q/RKDlvnorJIrihPkyniV3YY5cGgP+Qkx
+HUOT0uLA6LHtzfiyaOqkXwc4b0ZcQD5Vbf6Prd20Ppt6ei0zazkUPwxld3hgyw58
+m/4UIjG3PInWTNf293GngK2Bnz8Qx9e/6TueMSAn/3JBLem56E0WtmbLVjvko+LF
+PM5xA+m0BmuSJtrD1MUCXMhqYTtiOvgLBlUm5zkNxALzG+cXB28k6XikXt6MRG7q
+hzIPG38zwkooM55yy5i1YfcIi5NjMH6A+t4IJxxwb67MSb6UFOwg5kFokdONZcwj
+shczHdG9gLKSBIvrKa03Nd3W2dF9hMbRu//STcQxOailDBQCnXXfAATj9pYzdY4k
+ha8VCAREGAKTDAex9oXf1yRuktES4QIDAQABo2AwXjAdBgNVHQ4EFgQUC4tdmLVu
+f9hwfK4AGliaet5KkcgwDgYDVR0PAQH/BAQDAgIEMAwGA1UdEwQFMAMBAf8wHwYD
+VR0jBBgwFoAUC4tdmLVuf9hwfK4AGliaet5KkcgwDQYJKoZIhvcNAQENBQADggIB
+AGzL+GRnYu99zFoy0bXJKOGCF5XUXP/3gIXPRDqQf5g7Cu/jYMID9dB3No4Zmf7v
+qHjiSXiS8jx1j/6/Luk6PpFbT7QYm4QLs1f4BlfZOti2KE8r7KRDPIecUsUXW6P/
+3GJAVYH/+7OjA39za9AieM7+H5BELGccGrM5wfl7JeEz8in+V2ZWDzHQO4hMkiTQ
+4ZckuaL201F68YpiItBNnJ9N5nHr1MRiGyApHmLXY/wvlrOpclh95qn+lG6/2jk7
+3AmihLOKYMlPwPakJg4PYczm3icFLgTpjV5sq2md9bRyAg3oPGfAuWHmKj2Ikqch
+Td5CHKGxEEWbGUWEMP0s1A/JHWiCbDigc4Cfxhy56CWG4q0tYtnc2GMw8OAUO6Wf
+Xu5pYKNkzKSEtT/MrNJt44tTZWbKV/Pi/N2Fx36my7TgTUj7g3xcE9eF4JV2H/sg
+tsK3pwE0FEqGnT4qMFbixQmc8bGyuakr23wjMvfO7eZUxBuWYR2SkcP26sozF9PF
+tGhbZHQVGZUTVPyvwahMUEhbPGVerOW0IYpxkm0x/eaWdTc4vPpf/rIlgbAjarnJ
+UN9SaWRlWKSdP4haujnzCoJbM7dU9bjvlGZNyXEekgeT0W2qFeGGp+yyUWw8tNsp
+0BuC1b7uW/bBn/xKm319wXVDvBgZgcktMolak39V7DVO
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIBYjCCAQigAwIBAgIBATAKBggqhkjOPQQDAjAXMRUwEwYDVQQDEwxMRUFQIFJv
+b3QgQ0EwHhcNMjExMTAyMTkwNTM3WhcNMjYxMTAyMTkxMDM3WjAXMRUwEwYDVQQD
+EwxMRUFQIFJvb3QgQ0EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQxOXBGu+gf
+pjHzVteGTWL6XnFxtEnKMFpKaJkA/VOHmESzoLsZRQxt88GssxaqC01J17idQiqv
+zgNpedmtvFtyo0UwQzAOBgNVHQ8BAf8EBAMCAqQwEgYDVR0TAQH/BAgwBgEB/wIB
+ATAdBgNVHQ4EFgQUZdoUlJrCIUNFrpffAq+LQjnwEz4wCgYIKoZIzj0EAwIDSAAw
+RQIgfr3w4tnRG+NdI3LsGPlsRktGK20xHTzsB3orB0yC6cICIQCB+/9y8nmSStfN
+VUMUyk2hNd7/kC8nL222TTD7VZUtsg==
+-----END CERTIFICATE-----`)
+
+var riseupVPNCA = []byte(`-----BEGIN CERTIFICATE-----
+MIIBYjCCAQigAwIBAgIBATAKBggqhkjOPQQDAjAXMRUwEwYDVQQDEwxMRUFQIFJv
+b3QgQ0EwHhcNMjExMTAyMTkwNTM3WhcNMjYxMTAyMTkxMDM3WjAXMRUwEwYDVQQD
+EwxMRUFQIFJvb3QgQ0EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQxOXBGu+gf
+pjHzVteGTWL6XnFxtEnKMFpKaJkA/VOHmESzoLsZRQxt88GssxaqC01J17idQiqv
+zgNpedmtvFtyo0UwQzAOBgNVHQ8BAf8EBAMCAqQwEgYDVR0TAQH/BAgwBgEB/wIB
+ATAdBgNVHQ4EFgQUZdoUlJrCIUNFrpffAq+LQjnwEz4wCgYIKoZIzj0EAwIDSAAw
+RQIgfr3w4tnRG+NdI3LsGPlsRktGK20xHTzsB3orB0yC6cICIQCB+/9y8nmSStfN
+VUMUyk2hNd7/kC8nL222TTD7VZUtsg==
+-----END CERTIFICATE-----
+`)

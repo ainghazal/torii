@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -25,50 +27,31 @@ type config struct {
 }
 
 type netTest struct {
-	TestName string   `json:"test_name"`
-	Inputs   []string `json:"inputs"`
-	Options  options  `json:"options"`
+	TestName string      `json:"test_name"`
+	Inputs   []string    `json:"inputs"`
+	Options  vpn.Options `json:"options"`
 }
 
-type options struct {
-	Cipher   string
-	Auth     string
-	SafeCa   string
-	SafeCert string
-	SafeKey  string
-}
-
-type remote struct {
-	IP        string
-	Port      string
-	Transport string
-}
-
-var providerRemotes map[string][]remote
-
-func initProviderRemotes() {
-	providerRemotes = make(map[string][]remote)
-
-	// TODO fetch this from the provider API
-	riseupRemotes := []remote{
-		remote{"204.13.164.252", "1194", "udp"},
-		remote{"204.13.164.252", "1194", "tcp"},
+func pickRandomEndpoint(provider string) *vpn.Endpoint {
+	p := vpn.Providers[provider]
+	all := p.Endpoints()
+	if len(all) == 0 {
+		return nil
 	}
-
-	providerRemotes["riseup"] = riseupRemotes
-}
-
-func pickRandomRemote(provider string) remote {
-	all := providerRemotes[provider]
 	pick := rand.Intn(len(all))
+	log.Printf("Picked endpoint %d/%d\n", pick+1, len(all))
 	return all[pick]
 }
 
-func singleConfig(provider string) *config {
+var errNoConfig = errors.New("cannot build config")
 
+func singleVPNConfig(provider string) (*config, error) {
 	p := vpn.Providers[provider]
 	auth := p.Auth()
-	r := pickRandomRemote(provider)
+	endpoint := pickRandomEndpoint(provider)
+	if endpoint == nil {
+		return nil, errNoConfig
+	}
 
 	test := netTest{
 		TestName: "openvpn",
@@ -76,11 +59,11 @@ func singleConfig(provider string) *config {
 			fmt.Sprintf(
 				"vpn://%s.openvpn/?addr=%s:%s&transport=%s",
 				provider,
-				r.IP,
-				r.Port,
-				r.Transport,
+				endpoint.IP,
+				endpoint.Port,
+				endpoint.Transport,
 			)},
-		Options: options{
+		Options: vpn.Options{
 			Cipher:   "AES-256-GCM",
 			Auth:     "SHA512",
 			SafeCa:   auth.Ca,
@@ -93,18 +76,38 @@ func singleConfig(provider string) *config {
 		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider),
 		Author:      authorName,
 		NetTests:    []netTest{test},
+	}, nil
+}
+
+func errorString(err error) string {
+	if os.Getenv("DEBUG") == "1" {
+		return err.Error()
 	}
+	return "try again later"
 }
 
 func riseupDescriptor(w http.ResponseWriter, r *http.Request) {
-	cfg := singleConfig("riseup")
+	cfg, err := singleVPNConfig("riseup")
+	if err != nil {
+		http.Error(w, errorString(err), http.StatusGatewayTimeout)
+		return
+	}
 	json.NewEncoder(w).Encode(cfg)
 }
 
+var listeningPort = ":8080"
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	initProviderRemotes()
+
+	log.Println("🌿 Initializing all providers...")
+	err := vpn.InitAllProviders()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("🚀 Starting web server at", listeningPort)
+
 	router := mux.NewRouter().StrictSlash(false)
 	router.HandleFunc("/vpn/riseup.json", riseupDescriptor)
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(listeningPort, router))
 }
