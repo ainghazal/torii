@@ -41,3 +41,12 @@ func InitAllProviders() error {
 	}
 	return nil
 }
+
+func IsKnownProvider(name string) bool {
+	for _, provider := range Providers {
+		if name == provider.Name() {
+			return true
+		}
+	}
+	return false
+}

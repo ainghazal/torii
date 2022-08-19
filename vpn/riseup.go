@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 )
 
 var (
@@ -127,7 +128,7 @@ func fetchEndpointsFromAPI() ([]*Endpoint, error) {
 						Port:        port,
 						Proto:       "openvpn",
 						Transport:   proto, // the semantics are switched here
-						CountryCode: cc,
+						CountryCode: strings.ToLower(cc),
 						Obfuscation: obfs,
 					}
 					endp = append(endp, e)

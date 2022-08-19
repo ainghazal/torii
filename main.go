@@ -16,49 +16,36 @@ import (
 )
 
 var (
-	authorName = "Ain Ghazal <ain@openobservatory.org>"
+	listeningPort = ":8080"
 )
 
-type config struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Author      string    `json:"author"`
-	NetTests    []netTest `json:"nettests"`
-}
+const (
+	authorName = "Ain Ghazal <ain@openobservatory.org>"
 
-type netTest struct {
-	TestName string      `json:"test_name"`
-	Inputs   []string    `json:"inputs"`
-	Options  vpn.Options `json:"options"`
-}
+	paramProvider    = "provider"
+	paramCountryCode = "cc"
 
-func pickRandomEndpoint(provider string) *vpn.Endpoint {
-	p := vpn.Providers[provider]
-	all := p.Endpoints()
-	if len(all) == 0 {
-		return nil
-	}
-	pick := rand.Intn(len(all))
-	log.Printf("🎲 Picked endpoint %d/%d\n", pick+1, len(all))
-	return all[pick]
-}
+	errNotFoundStr = "not found"
+	errTryAgainStr = "try again later"
+	errNoConfig    = "cannot build config"
 
-var errNoConfig = errors.New("cannot build config")
+	msgHomeStr = "nothing to see here"
+)
 
-func randomizeVPNConfig(provider string) (*config, error) {
-	p := vpn.Providers[provider]
-	auth := p.Auth()
-	endpoint := pickRandomEndpoint(provider)
+func renderConfigForProvider(provider vpn.Provider, selector providerSelectorFn) (*config, error) {
+	endpoint := selector(provider)
 	if endpoint == nil {
-		return nil, errNoConfig
+		return nil, errors.New(errNoConfig)
 	}
+	auth := provider.Auth()
 
 	test := netTest{
-		TestName: "openvpn",
+		TestName: endpoint.Proto, // one of: openvpn, wg
 		Inputs: []string{
 			fmt.Sprintf(
-				"vpn://%s.openvpn/?addr=%s:%s&transport=%s",
-				provider,
+				"vpn://%s.%s/?addr=%s:%s&transport=%s",
+				provider.Name(),
+				endpoint.Proto,
 				endpoint.IP,
 				endpoint.Port,
 				endpoint.Transport,
@@ -72,22 +59,25 @@ func randomizeVPNConfig(provider string) (*config, error) {
 		},
 	}
 	return &config{
-		Name:        fmt.Sprintf("openvpn-%s", provider),
-		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider),
+		Name:        fmt.Sprintf("openvpn-%s", provider.Name()),
+		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider.Name()),
 		Author:      authorName,
 		NetTests:    []netTest{test},
 	}, nil
 }
 
-func errorString(err error) string {
-	if os.Getenv("DEBUG") == "1" {
-		return err.Error()
-	}
-	return "try again later"
+func getParam(param string, r *http.Request) string {
+	return mux.Vars(r)[param]
 }
 
-func riseupRandomDescriptor(w http.ResponseWriter, r *http.Request) {
-	cfg, err := randomizeVPNConfig("riseup")
+func randomEndpointDescriptor(w http.ResponseWriter, r *http.Request) {
+	providerName := getParam(paramProvider, r)
+	if !vpn.IsKnownProvider(providerName) {
+		http.Error(w, errNotFoundStr, http.StatusNotFound)
+		return
+	}
+	p := vpn.Providers[providerName]
+	cfg, err := renderConfigForProvider(p, randomEndpointPicker())
 	if err != nil {
 		http.Error(w, errorString(err), http.StatusGatewayTimeout)
 		return
@@ -95,11 +85,34 @@ func riseupRandomDescriptor(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(cfg)
 }
 
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("nothing to see here :)"))
+func byCountryEndpointDescriptor(w http.ResponseWriter, r *http.Request) {
+	providerName := getParam(paramProvider, r)
+	if !vpn.IsKnownProvider(providerName) {
+		http.Error(w, errNotFoundStr, http.StatusNotFound)
+		return
+	}
+
+	cc := getParam(paramCountryCode, r)
+
+	p := vpn.Providers[providerName]
+	cfg, err := renderConfigForProvider(p, byCountryEndpointPicker(cc))
+	if err != nil {
+		http.Error(w, errorString(err), http.StatusGatewayTimeout)
+		return
+	}
+	json.NewEncoder(w).Encode(cfg)
 }
 
-var listeningPort = ":8080"
+func errorString(err error) string {
+	if os.Getenv("DEBUG") == "1" {
+		return err.Error()
+	}
+	return errTryAgainStr
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(msgHomeStr))
+}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -113,9 +126,10 @@ func main() {
 
 	router := mux.NewRouter().StrictSlash(false)
 	router.HandleFunc("/", homeHandler)
-	vpn := router.PathPrefix("/vpn").Subrouter()
 
-	vpn.HandleFunc("/random/riseup.json", riseupRandomDescriptor)
+	vpn := router.PathPrefix("/vpn").Subrouter()
+	vpn.HandleFunc("/random/{provider}.json", randomEndpointDescriptor)
+	vpn.HandleFunc("/{cc}/{provider}.json", byCountryEndpointDescriptor)
 
 	log.Fatal(http.ListenAndServe(listeningPort, router))
 }
