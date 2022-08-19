@@ -39,13 +39,13 @@ func pickRandomEndpoint(provider string) *vpn.Endpoint {
 		return nil
 	}
 	pick := rand.Intn(len(all))
-	log.Printf("Picked endpoint %d/%d\n", pick+1, len(all))
+	log.Printf("🎲 Picked endpoint %d/%d\n", pick+1, len(all))
 	return all[pick]
 }
 
 var errNoConfig = errors.New("cannot build config")
 
-func singleVPNConfig(provider string) (*config, error) {
+func randomizeVPNConfig(provider string) (*config, error) {
 	p := vpn.Providers[provider]
 	auth := p.Auth()
 	endpoint := pickRandomEndpoint(provider)
@@ -86,13 +86,17 @@ func errorString(err error) string {
 	return "try again later"
 }
 
-func riseupDescriptor(w http.ResponseWriter, r *http.Request) {
-	cfg, err := singleVPNConfig("riseup")
+func riseupRandomDescriptor(w http.ResponseWriter, r *http.Request) {
+	cfg, err := randomizeVPNConfig("riseup")
 	if err != nil {
 		http.Error(w, errorString(err), http.StatusGatewayTimeout)
 		return
 	}
 	json.NewEncoder(w).Encode(cfg)
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("nothing to see here :)"))
 }
 
 var listeningPort = ":8080"
@@ -108,6 +112,10 @@ func main() {
 	log.Println("🚀 Starting web server at", listeningPort)
 
 	router := mux.NewRouter().StrictSlash(false)
-	router.HandleFunc("/vpn/riseup.json", riseupDescriptor)
+	router.HandleFunc("/", homeHandler)
+	vpn := router.PathPrefix("/vpn").Subrouter()
+
+	vpn.HandleFunc("/random/riseup.json", riseupRandomDescriptor)
+
 	log.Fatal(http.ListenAndServe(listeningPort, router))
 }
