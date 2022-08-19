@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/ainghazal/torii/share"
 	"github.com/ainghazal/torii/vpn"
 )
 
@@ -116,9 +117,14 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	db, err := share.InitDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
 	log.Println("🌿 Initializing all providers...")
-	err := vpn.InitAllProviders()
+	err = vpn.InitAllProviders()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -126,6 +132,14 @@ func main() {
 
 	router := mux.NewRouter().StrictSlash(false)
 	router.HandleFunc("/", homeHandler)
+
+	sr := router.PathPrefix("/share").Subrouter()
+	sr.HandleFunc("/new", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./assets/index.html")
+	})
+	// TODO move to /api/experiment
+	sr.HandleFunc("/create", share.AddExperimentHandler(db))
+	sr.HandleFunc("/list", share.ListExperimentHandler(db))
 
 	vpn := router.PathPrefix("/vpn").Subrouter()
 	vpn.HandleFunc("/random/{provider}.json", randomEndpointDescriptor)

@@ -1,0 +1,82 @@
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/umbrellajs"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.css">
+</head>
+<body>
+
+<div class="container">
+    <div class="row">
+	<div class="column column-60 column-offset-20">
+
+	    <h1>Share VPN experiment</h1>
+
+	    <form class="new-experiment" action="/share/create" method="POST">
+	      <fieldset>
+		<label for="nameField">Experient Name</label>
+		<input type="text" placeholder="My awesome experiment" id="nameField" name="name">
+
+		<label for="providerField">Provider</label>
+		<select id="providerField" name="provider">
+		  <option value="">(select one)</option>
+		  <option value="riseup">Riseup</option>
+		  <option value="tunnelbear">Tunnelbear</option>
+		</select>
+
+		<label for="countryField">Country</label>
+		<select id="countryField" name="cc">
+		  <option value="any">ANY</option>
+		  <option value="us">United States</option>
+		  <option value="ca">Canada</option>
+		  <option value="fr">France</option>
+                  <option value="nl">Netherland</option>
+		</select>
+
+		<label for="commentField">Comment</label>
+		<textarea placeholder="This endpoint provider does xyz" id="commentField" name="comment"></textarea>
+
+		<div class="float-right">
+		  <input type="checkbox" id="randomizePortField" name="randomPort">
+		  <label class="label-inline" for="confirmField">Randomize ports</label>
+		</div>
+
+		<input class="button-primary" type="submit" value="Send" id="do-submit">
+	      </fieldset>
+	    </form>
+	</div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    function serializeJSON (form) {
+      var obj = {};
+      Array.prototype.slice.call(form.elements).forEach(function (field) {
+	if (!field.name || field.disabled || ['file', 'reset', 'submit', 'button'].indexOf(field.type) > -1) return;
+	if (field.type === 'select-multiple') {
+	  var options = [];
+	  Array.prototype.slice.call(field.options).forEach(function (option) {
+	    if (!option.selected) return;
+	    options.push(option.value);
+	  });
+	  if (options.length) {
+	    obj[field.name] = options;
+	  }
+	  return;
+	}
+	if (['checkbox', 'radio'].indexOf(field.type) > -1 && !field.checked) return;
+	obj[field.name] = field.value;
+      });
+      return JSON.stringify(obj, null, 2);
+    }
+    // Handle form submission
+    u('form.new-experiment').handle('submit', async e => {
+	      const body = serializeJSON(e.target);
+              const data = await fetch('/share/create', {
+               method: 'POST', body
+              }).then(res => res.json());
+    });
+
+</script>
+
+</body>

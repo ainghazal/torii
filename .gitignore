@@ -1,3 +1,4 @@
 torii
 *.swp
 *.swo
+data/*
