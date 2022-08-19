@@ -30,7 +30,8 @@ type AuthDetails struct {
 
 // Providers is a map that allows to select providers by their name.
 var Providers = map[string]Provider{
-	"riseup": &RiseupProvider{},
+	"riseup":     &RiseupProvider{},
+	"tunnelbear": &TunnelbearProvider{},
 }
 
 // InitAllProviders calls the Bootstrap method on all the registered providers.
