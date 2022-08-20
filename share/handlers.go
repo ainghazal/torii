@@ -15,6 +15,7 @@ import (
 type httpHandler func(http.ResponseWriter, *http.Request)
 
 func AddExperimentHandler(db *bolt.DB) httpHandler {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		in, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -65,6 +66,13 @@ func ListExperimentHandler(db *bolt.DB) httpHandler {
 			return nil
 		})
 
+		w.Write([]byte("ok"))
+	}
+}
+
+// TODO I'm mixing up render + handler here. Decouple :)
+func RenderExperimentByUUID(db *bolt.DB) httpHandler {
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	}
 }

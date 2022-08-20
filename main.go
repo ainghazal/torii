@@ -130,20 +130,25 @@ func main() {
 	}
 	log.Println("🚀 Starting web server at", listeningPort)
 
-	router := mux.NewRouter().StrictSlash(false)
-	router.HandleFunc("/", homeHandler)
+	r := mux.NewRouter().StrictSlash(false)
+	r.HandleFunc("/", homeHandler)
+	api := r.PathPrefix("/api").Subrouter()
+	sr := r.PathPrefix("/share").Subrouter()
+	vpn := r.PathPrefix("/vpn").Subrouter()
 
-	sr := router.PathPrefix("/share").Subrouter()
+	// user pages
 	sr.HandleFunc("/new", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./assets/index.html")
 	})
-	// TODO move to /api/experiment
-	sr.HandleFunc("/create", share.AddExperimentHandler(db))
-	sr.HandleFunc("/list", share.ListExperimentHandler(db))
+	sr.HandleFunc("/{uuid}", share.RenderExperimentByUUID(db))
 
-	vpn := router.PathPrefix("/vpn").Subrouter()
+	// api calls
+	api.HandleFunc("/experiment/add", share.AddExperimentHandler(db))
+	api.HandleFunc("/experiment/list", share.ListExperimentHandler(db))
+
+	// json handlers
 	vpn.HandleFunc("/random/{provider}.json", randomEndpointDescriptor)
 	vpn.HandleFunc("/{cc}/{provider}.json", byCountryEndpointDescriptor)
 
-	log.Fatal(http.ListenAndServe(listeningPort, router))
+	log.Fatal(http.ListenAndServe(listeningPort, r))
 }
