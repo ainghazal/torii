@@ -8,9 +8,11 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
+	bolt "go.etcd.io/bbolt"
 
 	"github.com/ainghazal/torii/share"
 	"github.com/ainghazal/torii/vpn"
@@ -33,42 +35,45 @@ const (
 	msgHomeStr = "nothing to see here"
 )
 
+type httpHandler func(http.ResponseWriter, *http.Request)
+
 func renderConfigForProvider(provider vpn.Provider, selector providerSelectorFn) (*config, error) {
-	endpoint := selector(provider)
-	if endpoint == nil {
+	endpoints := selector(provider)
+	if len(endpoints) == 0 {
 		return nil, errors.New(errNoConfig)
 	}
 	auth := provider.Auth()
 
-	test := netTest{
-		TestName: endpoint.Proto, // one of: openvpn, wg
-		Inputs: []string{
-			fmt.Sprintf(
-				"vpn://%s.%s/?addr=%s:%s&transport=%s",
-				provider.Name(),
-				endpoint.Proto,
-				endpoint.IP,
-				endpoint.Port,
-				endpoint.Transport,
-			)},
-		Options: vpn.Options{
-			Cipher:   "AES-256-GCM",
-			Auth:     "SHA512",
-			SafeCa:   auth.Ca,
-			SafeCert: auth.Cert,
-			SafeKey:  auth.Key,
-		},
+	netTests := []netTest{}
+
+	for _, endpoint := range endpoints {
+		test := netTest{
+			TestName: endpoint.Proto, // one of: openvpn, wg
+			Inputs: []string{
+				fmt.Sprintf(
+					"vpn://%s.%s/?addr=%s:%s&transport=%s",
+					provider.Name(),
+					endpoint.Proto,
+					endpoint.IP,
+					endpoint.Port,
+					endpoint.Transport,
+				)},
+			Options: vpn.Options{
+				Cipher:   "AES-256-GCM",
+				Auth:     "SHA512",
+				SafeCa:   auth.Ca,
+				SafeCert: auth.Cert,
+				SafeKey:  auth.Key,
+			},
+		}
+		netTests = append(netTests, test)
 	}
 	return &config{
 		Name:        fmt.Sprintf("openvpn-%s", provider.Name()),
 		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider.Name()),
 		Author:      authorName,
-		NetTests:    []netTest{test},
+		NetTests:    netTests,
 	}, nil
-}
-
-func getParam(param string, r *http.Request) string {
-	return mux.Vars(r)[param]
 }
 
 func randomEndpointDescriptor(w http.ResponseWriter, r *http.Request) {
@@ -96,12 +101,40 @@ func byCountryEndpointDescriptor(w http.ResponseWriter, r *http.Request) {
 	cc := getParam(paramCountryCode, r)
 
 	p := vpn.Providers[providerName]
-	cfg, err := renderConfigForProvider(p, byCountryEndpointPicker(cc))
+	cfg, err := renderConfigForProvider(p, byCountryEndpointPicker(cc, 1))
 	if err != nil {
 		http.Error(w, errorString(err), http.StatusGatewayTimeout)
 		return
 	}
 	json.NewEncoder(w).Encode(cfg)
+}
+
+func DescriptorByUUIDHandler(db *bolt.DB) httpHandler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uuid := getParam("uuid", r)
+		exp := share.GetExperimentByUUID(db, uuid)[0]
+		p := vpn.Providers[exp.Provider]
+		cc := exp.CountryCode
+		max := exp.Max
+
+		cfg, err := renderConfigForProvider(p, byCountryEndpointPicker(cc, strToIntOrOne(max)))
+		if err != nil {
+			http.Error(w, errorString(err), http.StatusGatewayTimeout)
+			return
+		}
+		json.NewEncoder(w).Encode(cfg)
+	}
+}
+
+func strToIntOrOne(s string) int {
+	maxInt := 1
+	if s != "" {
+		mi, err := strconv.Atoi(s)
+		if err == nil {
+			maxInt = mi
+		}
+	}
+	return maxInt
 }
 
 func errorString(err error) string {
@@ -113,6 +146,10 @@ func errorString(err error) string {
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(msgHomeStr))
+}
+
+func getParam(param string, r *http.Request) string {
+	return mux.Vars(r)[param]
 }
 
 func main() {
@@ -133,25 +170,26 @@ func main() {
 	r := mux.NewRouter().StrictSlash(false)
 	r.HandleFunc("/", homeHandler)
 	api := r.PathPrefix("/api").Subrouter()
-	sr := r.PathPrefix("/share").Subrouter()
+	shr := r.PathPrefix("/share").Subrouter()
 	vpn := r.PathPrefix("/vpn").Subrouter()
 
 	// user pages
-	sr.HandleFunc("/new", func(w http.ResponseWriter, r *http.Request) {
+	shr.HandleFunc("/new", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./assets/new.html")
 	})
-	sr.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
+	shr.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./assets/list.html")
 	})
-	sr.HandleFunc("/{uuid}", share.RenderExperimentByUUID(db))
 
 	// api calls
 	api.HandleFunc("/experiment/add", share.AddExperimentHandler(db))
 	api.HandleFunc("/experiment/list", share.ListExperimentHandler(db))
+	api.HandleFunc("/experiment/{uuid}", share.RenderJSONExperimentByUUID(db))
 
 	// json handlers
 	vpn.HandleFunc("/random/{provider}.json", randomEndpointDescriptor)
 	vpn.HandleFunc("/{cc}/{provider}.json", byCountryEndpointDescriptor)
+	shr.HandleFunc("/{uuid}", DescriptorByUUIDHandler(db))
 
 	log.Fatal(http.ListenAndServe(listeningPort, r))
 }

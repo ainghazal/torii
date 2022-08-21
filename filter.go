@@ -7,13 +7,14 @@ import (
 	"github.com/ainghazal/torii/vpn"
 )
 
-type providerSelectorFn func(vpn.Provider) *vpn.Endpoint
+type providerSelectorFn func(vpn.Provider) []*vpn.Endpoint
 type providerFilterFn func(*vpn.Endpoint) bool
 
-// filterAndRandomizeEndpointPicker accepts a provider and a boolean filter. It
-// will return a pointer to a vpn.Endpoint struct, chosen pseudo-randomly after
+// filterAndRandomizeEndpointPicker accepts a provider, a boolean filter, and
+// an integer indicating the maximum number of desired results. It
+// will return an array of pointers to vpn.Endpoint structs, chosen pseudo-randomly after
 // applying the passed filter to the list of all endpoints for that provider.
-func filterAndRandomizeEndpointPicker(p vpn.Provider, filter providerFilterFn) *vpn.Endpoint {
+func filterAndRandomizeEndpointsPicker(p vpn.Provider, filter providerFilterFn, max int) (res []*vpn.Endpoint) {
 	all := p.Endpoints()
 	if len(all) == 0 {
 		return nil
@@ -25,11 +26,15 @@ func filterAndRandomizeEndpointPicker(p vpn.Provider, filter providerFilterFn) *
 		}
 	}
 	if len(sel) == 0 {
-		return nil
+		return res
 	}
-	pick := rand.Intn(len(sel))
-	log.Printf("🎲 Picked endpoint %d/%d\n", pick+1, len(sel))
-	return sel[pick]
+	for i := 0; i < max; i++ {
+		log.Println("iterating...", i)
+		pick := rand.Intn(len(sel))
+		log.Printf("🎲 Picked endpoint %d/%d\n", pick+1, len(sel))
+		res = append(res, sel[pick])
+	}
+	return res
 }
 
 func randomEndpointPicker() providerSelectorFn {
@@ -37,12 +42,12 @@ func randomEndpointPicker() providerSelectorFn {
 		return true
 	}
 	// curry filterAndRandomizeEndpointPicker
-	return func(p vpn.Provider) *vpn.Endpoint {
-		return filterAndRandomizeEndpointPicker(p, all)
+	return func(p vpn.Provider) []*vpn.Endpoint {
+		return filterAndRandomizeEndpointsPicker(p, all, 1)
 	}
 }
 
-func byCountryEndpointPicker(cc string) providerSelectorFn {
+func byCountryEndpointPicker(cc string, max int) providerSelectorFn {
 	filterByCC := func(e *vpn.Endpoint) bool {
 		if e.CountryCode == cc {
 			return true
@@ -50,7 +55,7 @@ func byCountryEndpointPicker(cc string) providerSelectorFn {
 		return false
 	}
 	// curry filterAndRandomizeEndpointPicker
-	return func(p vpn.Provider) *vpn.Endpoint {
-		return filterAndRandomizeEndpointPicker(p, filterByCC)
+	return func(p vpn.Provider) []*vpn.Endpoint {
+		return filterAndRandomizeEndpointsPicker(p, filterByCC, max)
 	}
 }

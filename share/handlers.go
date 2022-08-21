@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -24,12 +26,14 @@ func AddExperimentHandler(db *bolt.DB) httpHandler {
 		}
 		fmt.Println("add:", string(in))
 
-		exp := &experiment{}
+		exp := &Experiment{}
 		err = json.Unmarshal(in, exp)
 		if err != nil {
 			http.Error(w, "bad json request", http.StatusBadRequest)
 			return
 		}
+
+		log.Println("exp max:", exp.Max)
 
 		// TODO do validate empty fields etc
 		rawUUID := uuid.New()
@@ -45,7 +49,7 @@ func AddExperimentHandler(db *bolt.DB) httpHandler {
 				return err
 			}
 			// persist experiment in its own bucket
-			return b.Put(itob(exp.ID), buf)
+			return b.Put([]byte(exp.UUID), buf)
 		})
 
 		res := &result{true, exp.UUID}
@@ -54,19 +58,20 @@ func AddExperimentHandler(db *bolt.DB) httpHandler {
 }
 
 func ListExperimentHandler(db *bolt.DB) httpHandler {
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		sel := []*experiment{}
+		sel := []*Experiment{}
 
 		db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(experimentBucket))
 
 			b.ForEach(func(k, v []byte) error {
-				exp := new(experiment)
+				exp := new(Experiment)
 				err := json.Unmarshal(v, exp)
 				if err == nil {
 					sel = append(sel, exp)
 				}
-				return nil
+				return err
 			})
 			return nil
 		})
@@ -79,10 +84,35 @@ func ListExperimentHandler(db *bolt.DB) httpHandler {
 	}
 }
 
-// TODO I'm mixing up render + handler here. Decouple :)
-func RenderExperimentByUUID(db *bolt.DB) httpHandler {
+func GetExperimentByUUID(db *bolt.DB, uuid string) []*Experiment {
+	sel := []*Experiment{}
+
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(experimentBucket))
+		v := b.Get([]byte(uuid))
+
+		exp := new(Experiment)
+		err := json.Unmarshal(v, exp)
+		if err == nil {
+			sel = append(sel, exp)
+		}
+		return err
+	})
+	return sel
+}
+
+func RenderJSONExperimentByUUID(db *bolt.DB) httpHandler {
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+		uuid := mux.Vars(r)["uuid"]
+		sel := GetExperimentByUUID(db, uuid)
+
+		res := []*resultExp{&resultExp{
+			OK:   true,
+			Data: sel,
+		},
+		}
+		json.NewEncoder(w).Encode(res)
 	}
 }
 

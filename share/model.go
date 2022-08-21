@@ -1,6 +1,6 @@
 package share
 
-type experiment struct {
+type Experiment struct {
 	ID           int    `json:"ID"`
 	Name         string `json:"name"`
 	Provider     string `json:"provider"`
@@ -18,5 +18,5 @@ type result struct {
 
 type resultExp struct {
 	OK   bool          `json:"ok"`
-	Data []*experiment `json:"data"`
+	Data []*Experiment `json:"data"`
 }
