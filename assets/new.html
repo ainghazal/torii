@@ -15,7 +15,7 @@
 	    <form class="new-experiment" action="/share/create" method="POST">
 	      <fieldset>
 		<label for="nameField">Experient Name</label>
-		<input type="text" placeholder="My awesome experiment" id="nameField" name="name">
+		<input type="text" placeholder="A random sample experiment for VPN providers" id="nameField" name="name">
 
 		<label for="providerField">Provider</label>
 		<select id="providerField" name="provider">
@@ -33,8 +33,11 @@
                   <option value="nl">Netherland</option>
 		</select>
 
+		<label for="maxEndpoints">Number of max endpoints</label>
+                <input type="text" placeholder="10" id="maxField" name="max">
+
 		<label for="commentField">Comment</label>
-		<textarea placeholder="This endpoint provider does xyz" id="commentField" name="comment"></textarea>
+		<textarea placeholder="(optional) this subset is xyz" id="commentField" name="comment"></textarea>
 
 		<div class="float-right">
 		  <input type="checkbox" id="randomizePortField" name="randomPort">
@@ -44,6 +47,10 @@
 		<input class="button-primary" type="submit" value="Send" id="do-submit">
 	      </fieldset>
 	    </form>
+            <div class="hidden" id="show-experiment-url">
+                <p>The experiment has been saved. You can share the following URL:</p>
+                <div><span id="new-experiment-uuid">https://run.example.org/share/</span></div>
+            </div>
 	</div>
     </div>
 </div>
@@ -72,11 +79,25 @@
     // Handle form submission
     u('form.new-experiment').handle('submit', async e => {
 	      const body = serializeJSON(e.target);
-              const data = await fetch('/share/create', {
+              const result = await fetch('/api/experiment/add', {
                method: 'POST', body
-              }).then(res => res.json());
+                  }).then(res => res.json());
+              if (result.ok) {
+                  const uuid = result.data;
+                  u("form.new-experiment").addClass("hidden").removeClass("visible");
+                  u("#show-experiment-url").removeClass("hidden").addClass("visible");
+                  u("#new-experiment-uuid").html("<a href='/share/" + uuid +"'>https://run.example.com/share/" + uuid + "</a>");
+              }
     });
-
 </script>
+
+<style>
+.hidden {
+    display: none;
+}
+.visible{
+    display: block;
+}
+</style>
 
 </body>

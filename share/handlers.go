@@ -48,25 +48,34 @@ func AddExperimentHandler(db *bolt.DB) httpHandler {
 			return b.Put(itob(exp.ID), buf)
 		})
 
-		res := []*result{&result{true}}
+		res := &result{true, exp.UUID}
 		json.NewEncoder(w).Encode(res)
 	}
 }
 
 func ListExperimentHandler(db *bolt.DB) httpHandler {
 	return func(w http.ResponseWriter, r *http.Request) {
+		sel := []*experiment{}
 
 		db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(experimentBucket))
 
 			b.ForEach(func(k, v []byte) error {
-				fmt.Printf("key=%v, value=%s\n", k, v)
+				exp := new(experiment)
+				err := json.Unmarshal(v, exp)
+				if err == nil {
+					sel = append(sel, exp)
+				}
 				return nil
 			})
 			return nil
 		})
-
-		w.Write([]byte("ok"))
+		res := []*resultExp{&resultExp{
+			OK:   true,
+			Data: sel,
+		},
+		}
+		json.NewEncoder(w).Encode(res)
 	}
 }
 

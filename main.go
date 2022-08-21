@@ -138,7 +138,10 @@ func main() {
 
 	// user pages
 	sr.HandleFunc("/new", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./assets/index.html")
+		http.ServeFile(w, r, "./assets/new.html")
+	})
+	sr.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./assets/list.html")
 	})
 	sr.HandleFunc("/{uuid}", share.RenderExperimentByUUID(db))
 
