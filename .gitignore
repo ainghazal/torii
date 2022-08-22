@@ -3,3 +3,4 @@ torii.yaml
 *.swp
 *.swo
 data/*
+certs/*

@@ -12,18 +12,22 @@ import (
 func autoTLSServer(r http.Handler) (*http.Server, autocert.Manager) {
 	sn := serverName()
 	log.Printf("Configuring TLS cert for %s\n", sn)
+	email := ""
+	if cfgEmail := viper.Get("email"); cfgEmail != nil {
+		email = cfgEmail.(string)
+	}
 
 	certManager := autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(serverName()),
 		Cache:      autocert.DirCache("certs"),
-		Email:      viper.Get("email").(string),
+		Email:      email,
 	}
 
 	server := &http.Server{
-		Addr: ":https",
+		Addr:      ":https",
 		TLSConfig: certManager.TLSConfig(),
-		Handler: r,
+		Handler:   r,
 	}
 
 	return server, certManager
