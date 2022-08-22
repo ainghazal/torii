@@ -22,8 +22,8 @@ func renderConfigForProvider(provider vpn.Provider, selector providerSelectorFn)
 			Inputs: []string{
 				fmt.Sprintf(
 					"vpn://%s.%s/?addr=%s:%s&transport=%s",
-					provider.Name(),
 					endpoint.Proto,
+					provider.Name(),
 					endpoint.IP,
 					endpoint.Port,
 					endpoint.Transport,
