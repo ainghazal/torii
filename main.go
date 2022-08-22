@@ -68,5 +68,10 @@ func main() {
 	vpn.HandleFunc("/{cc}/{provider}.json", byCountryEndpointDescriptor)
 	shr.HandleFunc("/{uuid}", DescriptorByUUIDHandler(db))
 
-	log.Fatal(http.ListenAndServe(listeningPort, r))
+	if skipTLS() {
+		log.Fatal(http.ListenAndServe(listeningPort, r))
+	} else {
+		log.Println("TLS not supported yet")
+
+	}
 }

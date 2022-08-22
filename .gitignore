@@ -1,4 +1,5 @@
 torii
+torii.yaml
 *.swp
 *.swo
 data/*

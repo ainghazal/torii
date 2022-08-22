@@ -5,4 +5,4 @@ dev-deps:
 	go install github.com/githubnemo/CompileDaemon
 
 dev-server:
-	CompileDaemon -command="./torii"
+	TORII_INSECURE=yes CompileDaemon -command="./torii"

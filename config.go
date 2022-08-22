@@ -19,3 +19,7 @@ func loadConfig() {
 	// not capturing error because config file is optional
 	_ = viper.ReadInConfig()
 }
+
+func skipTLS() bool {
+	return viper.Get("insecure") == "yes"
+}
