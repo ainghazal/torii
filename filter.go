@@ -29,7 +29,6 @@ func filterAndRandomizeEndpointsPicker(p vpn.Provider, filter providerFilterFn, 
 		return res
 	}
 	for i := 0; i < max; i++ {
-		log.Println("iterating...", i)
 		pick := rand.Intn(len(sel))
 		log.Printf("🎲 Picked endpoint %d/%d\n", pick+1, len(sel))
 		res = append(res, sel[pick])
@@ -37,6 +36,8 @@ func filterAndRandomizeEndpointsPicker(p vpn.Provider, filter providerFilterFn, 
 	return res
 }
 
+// randomEndpointPicker returns a provider selector that picks one random
+// endpoint.
 func randomEndpointPicker() providerSelectorFn {
 	all := func(e *vpn.Endpoint) bool {
 		return true
@@ -47,6 +48,8 @@ func randomEndpointPicker() providerSelectorFn {
 	}
 }
 
+// byCountryEndpointPicker returns a provider selector that picks a number max
+// of endpoints after filtering by country code.
 func byCountryEndpointPicker(cc string, max int) providerSelectorFn {
 	filterByCC := func(e *vpn.Endpoint) bool {
 		if e.CountryCode == cc {
