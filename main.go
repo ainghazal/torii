@@ -42,8 +42,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("🚀 Starting web server at", listeningPort)
-
 	r := mux.NewRouter().StrictSlash(false)
 	r.HandleFunc("/", homeHandler)
 	api := r.PathPrefix("/api").Subrouter()
@@ -69,9 +67,11 @@ func main() {
 	shr.HandleFunc("/{uuid}", DescriptorByUUIDHandler(db))
 
 	if skipTLS() {
+		log.Println("🚀 Starting web server at", listeningPort)
 		log.Fatal(http.ListenAndServe(listeningPort, r))
 	} else {
-		log.Println("TLS not supported yet")
-
+		tlsServer, certManager := autoTLSServer(http.Handler(r))
+		go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
+		log.Fatal(tlsServer.ListenAndServeTLS("", ""))
 	}
 }

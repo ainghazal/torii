@@ -7,6 +7,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/spf13/viper v1.12.0
 	go.etcd.io/bbolt v1.3.6
+	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 )
 
 require (
@@ -21,6 +22,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.3.0 // indirect
+	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect

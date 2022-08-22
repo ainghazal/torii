@@ -1,1 +1,3 @@
 insecure: false
+server_name: example.org
+email: postmaster@example.org

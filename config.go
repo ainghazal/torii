@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/spf13/viper"
 )
 
@@ -22,4 +24,12 @@ func loadConfig() {
 
 func skipTLS() bool {
 	return viper.Get("insecure") == "yes"
+}
+
+func serverName() string {
+	sn := viper.Get("server_name")
+	if !skipTLS() && sn == nil {
+		log.Fatal("ERROR: missing server_name in config (tls: true)")
+	}
+	return sn.(string)
 }
