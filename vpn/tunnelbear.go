@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,8 +31,8 @@ func (t *TunnelbearProvider) Name() string {
 	return tunnelbearName
 }
 
-// Bootstrap implements boostrap method. It will fetch endpoitns from tunnelbear
-// api, and get a fresh certificate.
+// Bootstrap implements boostrap method. It will fetch endpoints from the Tunnelbear
+// config files, and get a fresh certificate.
 func (t *TunnelbearProvider) Bootstrap() bool {
 	log.Println("🌱 Bootstrapping Tunnelbear")
 	if !hasConfigZipFile() {
@@ -39,6 +40,27 @@ func (t *TunnelbearProvider) Bootstrap() bool {
 	}
 	t.domainMap = extractCountryDomainsFromConfigFolder(openVPNConfigPath())
 	log.Printf("-- Got %d endpoint domains\n", len(t.domainMap))
+
+	t.endpoints = []*Endpoint{}
+	// TODO parallelize name resolution?
+	for cc, v := range t.domainMap {
+		domainAndPort := strings.Split(v, ":")
+		domain := domainAndPort[0]
+		port := domainAndPort[1]
+		for i, ip := range resolveIP(domain) {
+			e := &Endpoint{
+				Label:       fmt.Sprintf("%s-%d", cc, i),
+				IP:          ip.String(),
+				Port:        port,
+				Proto:       "openvpn",
+				Transport:   "tcp", // TODO does it support UDP too, same port??
+				Obfuscation: "none",
+				CountryCode: cc,
+			}
+			t.endpoints = append(t.endpoints, e)
+		}
+	}
+	log.Printf("-- Got %d endpoints\n", len(t.endpoints))
 
 	return true
 }
@@ -49,11 +71,6 @@ func (r *TunnelbearProvider) Endpoints() []*Endpoint {
 		return []*Endpoint{}
 	}
 	return r.endpoints
-}
-
-// Endpoitns returns Endpoints filtered by country code.
-func (r *TunnelbearProvider) EndpointByCountry(cc string) []*Endpoint {
-	return nil
 }
 
 // AuthDetails returns valid authentication for this provider.
@@ -133,4 +150,12 @@ func getCountryCodeFromSubdomain(d string) string {
 		return ""
 	}
 	return p[0]
+}
+
+func resolveIP(url string) []net.IP {
+	ips, err := net.LookupIP(url)
+	if err != nil {
+		return []net.IP{}
+	}
+	return ips
 }

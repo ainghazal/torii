@@ -16,7 +16,6 @@ type Provider interface {
 	Name() string
 	Bootstrap() bool
 	Endpoints() []*Endpoint
-	EndpointByCountry(string) []*Endpoint
 	Auth() AuthDetails
 }
 
@@ -42,6 +41,8 @@ func InitAllProviders() error {
 	return nil
 }
 
+// IsIsKnownProvider returns true if the passed provider name is in our list of
+// known providers.
 func IsKnownProvider(name string) bool {
 	for _, provider := range Providers {
 		if name == provider.Name() {

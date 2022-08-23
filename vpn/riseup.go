@@ -53,11 +53,6 @@ func (r *RiseupProvider) Endpoints() []*Endpoint {
 	return r.endpoints
 }
 
-// Endpoitns returns Endpoints filtered by country code.
-func (r *RiseupProvider) EndpointByCountry(cc string) []*Endpoint {
-	return nil
-}
-
 // AuthDetails returns valid authentication for this provider.
 func (r *RiseupProvider) Auth() AuthDetails {
 	return r.auth
