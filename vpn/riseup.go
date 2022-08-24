@@ -24,6 +24,10 @@ func (r *RiseupProvider) Name() string {
 	return riseupName
 }
 
+func (r *RiseupProvider) LongName() string {
+	return riseupName
+}
+
 // Bootstrap implements boostrap method. It will fetch endpoitns from riseup
 // api, and get a fresh certificate.
 // TODO this certificate needs to be refreshed every few days.

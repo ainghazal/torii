@@ -19,10 +19,14 @@
 
 		<label for="providerField">Provider</label>
 		<select id="providerField" name="provider">
-		  <option value="">(select one)</option>
 		  <option value="riseup">Riseup</option>
 		  <option value="tunnelbear">Tunnelbear</option>
+		  <option value="unknown">Unknown</option>
 		</select>
+
+		<label for="remoteField">Provider</label>
+		<input type="text" placeholder="1.1.1.1:443" id="remoteField" name="endpoint_remote">
+
 
 		<label for="countryField">Country</label>
 		<select id="countryField" name="cc">

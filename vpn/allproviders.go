@@ -14,6 +14,7 @@ type Endpoint struct {
 // Provider is the entity that runs endpoints.
 type Provider interface {
 	Name() string
+	LongName() string
 	Bootstrap() bool
 	Endpoints() []*Endpoint
 	Auth() AuthDetails

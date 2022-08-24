@@ -7,7 +7,7 @@ import (
 	"github.com/ainghazal/torii/vpn"
 )
 
-func renderConfigForProvider(provider vpn.Provider, selector providerSelectorFn) (*config, error) {
+func renderConfigForProvider(provider vpn.Provider, selector endpointSelectorFn) (*config, error) {
 	endpoints := selector(provider)
 	if len(endpoints) == 0 {
 		return nil, errors.New(errNoConfig)
@@ -39,8 +39,8 @@ func renderConfigForProvider(provider vpn.Provider, selector providerSelectorFn)
 		netTests = append(netTests, test)
 	}
 	return &config{
-		Name:        fmt.Sprintf("openvpn-%s", provider.Name()),
-		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider.Name()),
+		Name:        fmt.Sprintf("openvpn-%s", provider.LongName()),
+		Description: fmt.Sprintf("measure vpn connection to random %s gateways", provider.LongName()),
 		Author:      authorName,
 		NetTests:    netTests,
 	}, nil

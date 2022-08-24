@@ -7,7 +7,7 @@ import (
 	"github.com/ainghazal/torii/vpn"
 )
 
-type providerSelectorFn func(vpn.Provider) []*vpn.Endpoint
+type endpointSelectorFn func(vpn.Provider) []*vpn.Endpoint
 type providerFilterFn func(*vpn.Endpoint) bool
 
 // filterAndRandomizeEndpointPicker accepts a provider, a boolean filter, and
@@ -38,7 +38,7 @@ func filterAndRandomizeEndpointsPicker(p vpn.Provider, filter providerFilterFn, 
 
 // randomEndpointPicker returns a provider selector that picks one random
 // endpoint.
-func randomEndpointPicker() providerSelectorFn {
+func randomEndpointPicker() endpointSelectorFn {
 	all := func(e *vpn.Endpoint) bool {
 		return true
 	}
@@ -50,7 +50,7 @@ func randomEndpointPicker() providerSelectorFn {
 
 // byCountryEndpointPicker returns a provider selector that picks a number max
 // of endpoints after filtering by country code.
-func byCountryEndpointPicker(cc string, max int) providerSelectorFn {
+func byCountryEndpointPicker(cc string, max int) endpointSelectorFn {
 	filterByCC := func(e *vpn.Endpoint) bool {
 		if e.CountryCode == cc {
 			return true

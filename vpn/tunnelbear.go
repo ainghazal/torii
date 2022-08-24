@@ -31,6 +31,10 @@ func (t *TunnelbearProvider) Name() string {
 	return tunnelbearName
 }
 
+func (t *TunnelbearProvider) LongName() string {
+	return tunnelbearName
+}
+
 // Bootstrap implements boostrap method. It will fetch endpoints from the Tunnelbear
 // config files, and get a fresh certificate.
 func (t *TunnelbearProvider) Bootstrap() bool {

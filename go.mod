@@ -3,6 +3,7 @@ module github.com/ainghazal/torii
 go 1.18
 
 require (
+	github.com/dustinkirkland/golang-petname v0.0.0-20191129215211-8e5a1ed0cff0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/spf13/viper v1.12.0

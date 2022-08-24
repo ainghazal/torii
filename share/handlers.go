@@ -11,10 +11,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+
+	petname "github.com/dustinkirkland/golang-petname"
 	bolt "go.etcd.io/bbolt"
 )
 
 type httpHandler func(http.ResponseWriter, *http.Request)
+
+// randomPetname returns a two-word petname in the form "fluffy-foobar"
+func randomPetname() string {
+	petname.NonDeterministicMode()
+	return petname.Generate(2, "-")
+}
 
 func AddExperimentHandler(db *bolt.DB) httpHandler {
 
@@ -31,6 +39,10 @@ func AddExperimentHandler(db *bolt.DB) httpHandler {
 		if err != nil {
 			http.Error(w, "bad json request", http.StatusBadRequest)
 			return
+		}
+		if exp.Name == "" {
+			exp.Name = randomPetname()
+			log.Printf("Assigned experiment name: %s\n", exp.Name)
 		}
 
 		log.Println("exp max:", exp.Max)
