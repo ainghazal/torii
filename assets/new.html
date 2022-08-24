@@ -9,9 +9,7 @@
 <div class="container">
     <div class="row">
 	<div class="column column-60 column-offset-20">
-
 	    <h1>Share VPN experiment</h1>
-
 	    <form class="new-experiment" action="/share/create" method="POST">
 	      <fieldset>
 		<label for="nameField">Experient Name</label>
@@ -60,29 +58,30 @@
 </div>
 
 <script type="text/javascript">
+    // utility function
     function serializeJSON (form) {
       var obj = {};
       Array.prototype.slice.call(form.elements).forEach(function (field) {
-	if (!field.name || field.disabled || ['file', 'reset', 'submit', 'button'].indexOf(field.type) > -1) return;
-	if (field.type === 'select-multiple') {
-	  var options = [];
-	  Array.prototype.slice.call(field.options).forEach(function (option) {
-	    if (!option.selected) return;
-	    options.push(option.value);
-	  });
-	  if (options.length) {
-	    obj[field.name] = options;
-	  }
-	  return;
-	}
-	if (['checkbox', 'radio'].indexOf(field.type) > -1 && !field.checked) return;
-	obj[field.name] = field.value;
+        if (!field.name || field.disabled || ['file', 'reset', 'submit', 'button'].indexOf(field.type) > -1) return;
+        if (field.type === 'select-multiple') {
+          var options = [];
+          Array.prototype.slice.call(field.options).forEach(function (option) {
+            if (!option.selected) return;
+            options.push(option.value);
+          });
+          if (options.length) {
+            obj[field.name] = options;
+          }
+          return;
+        }
+        if (['checkbox', 'radio'].indexOf(field.type) > -1 && !field.checked) return;
+        obj[field.name] = field.value;
       });
       return JSON.stringify(obj, null, 2);
     }
     // Handle form submission
     u('form.new-experiment').handle('submit', async e => {
-	      const body = serializeJSON(e.target);
+              const body = serializeJSON(e.target);
               const result = await fetch('/api/experiment/add', {
                method: 'POST', body
                   }).then(res => res.json());
@@ -90,7 +89,7 @@
                   const uuid = result.data;
                   u("form.new-experiment").addClass("hidden").removeClass("visible");
                   u("#show-experiment-url").removeClass("hidden").addClass("visible");
-                  u("#new-experiment-uuid").html("<a href='https://share.asdf.network/share/" + uuid +"'>https://share.asdf.network.com/share/" + uuid + "</a>");
+                      u("#new-experiment-uuid").html("<a href='https://share.asdf.network/share/" + uuid +"'> https://share.asdf.network.com/share/" + uuid + " </a><br/> <p style='font-size: 80%;'>👉 see <a href='/share/list'>list</a>");
               }
     });
 </script>
