@@ -8,11 +8,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
 var (
 	riseupName = "riseup"
+	// port 53 is proving to be problematic
+	portsToAvoid = []int{53}
 )
 
 type RiseupProvider struct {
@@ -114,6 +117,11 @@ func fetchEndpointsFromAPI() ([]*Endpoint, error) {
 		for _, transport := range gw.Capabilities.Transport {
 			for _, proto := range transport.Protocols {
 				for _, port := range transport.Ports {
+
+					if shouldAvoidPort(port) {
+						continue
+					}
+
 					var obfs string
 					switch transport.Type {
 					case "obfs4":
@@ -153,6 +161,20 @@ func fetchCertificateFromAPI() (AuthDetails, error) {
 		Ca:   string(toBase64(riseupVPNCA)),
 	}
 	return auth, nil
+}
+
+func shouldAvoidPort(port string) bool {
+	i, err := strconv.Atoi(port)
+	if err != nil {
+		log.Printf("WARN bad port %v", i)
+		return true
+	}
+	for _, p := range portsToAvoid {
+		if p == i {
+			return true
+		}
+	}
+	return false
 }
 
 //
