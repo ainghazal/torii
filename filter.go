@@ -1,14 +1,38 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
+	"net"
+	"net/netip"
 
 	"github.com/ainghazal/torii/vpn"
 )
 
 type endpointSelectorFn func(vpn.Provider) []*vpn.Endpoint
 type providerFilterFn func(*vpn.Endpoint) bool
+
+func nullFilter(*vpn.Endpoint) bool {
+	return true
+}
+
+func healthyFilter(provider string) providerFilterFn {
+	hs, ok := healthServiceMap[provider]
+	if !ok {
+		return nullFilter
+	}
+	return func(endp *vpn.Endpoint) bool {
+		addrStr := fmt.Sprintf("%s:%s", endp.IP, endp.Port)
+		addr := net.TCPAddrFromAddrPort(netip.MustParseAddrPort(addrStr))
+		healthy, err := hs.Healthy(addr, endp.Transport)
+		if err != nil {
+			log.Println("ERROR:", err)
+			return true
+		}
+		return healthy
+	}
+}
 
 // filterAndRandomizeEndpointPicker accepts a provider, a boolean filter, and
 // an integer indicating the maximum number of desired results. It
@@ -20,8 +44,9 @@ func filterAndRandomizeEndpointsPicker(p vpn.Provider, filter providerFilterFn, 
 		return nil
 	}
 	sel := []*vpn.Endpoint{}
+	healthy := healthyFilter(p.Name())
 	for _, endp := range all {
-		if filter(endp) {
+		if filter(endp) && healthy(endp) {
 			sel = append(sel, endp)
 		}
 	}
