@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -46,35 +47,44 @@ func (t *TunnelbearProvider) Bootstrap() bool {
 	log.Printf("-- Got %d endpoint domains\n", len(t.domainMap))
 
 	t.endpoints = []*Endpoint{}
-	// TODO parallelize name resolution?
+	// TODO parallelize name resolution
 	for cc, v := range t.domainMap {
 		domainAndPort := strings.Split(v, ":")
 		domain := domainAndPort[0]
 		port := domainAndPort[1]
 		for i, ip := range resolveIP(domain) {
-			e := &Endpoint{
-				Label:       fmt.Sprintf("%s-%d", cc, i),
-				IP:          ip.String(),
-				Port:        port,
-				Proto:       "openvpn",
-				Transport:   "tcp", // TODO does it support UDP too, same port??
-				Obfuscation: "none",
-				CountryCode: cc,
+			for _, tr := range []string{"tcp", "udp"} {
+				e := &Endpoint{
+					Label:       fmt.Sprintf("%s-%d", cc, i),
+					IP:          ip.String(),
+					Port:        port,
+					Proto:       "openvpn",
+					Transport:   tr,
+					Obfuscation: "none",
+					CountryCode: cc,
+				}
+				t.endpoints = append(t.endpoints, e)
 			}
-			t.endpoints = append(t.endpoints, e)
 		}
 	}
 	log.Printf("-- Got %d endpoints\n", len(t.endpoints))
 
+	caFile, err := os.Open(filepath.Join(tunnelBearPath(), "config", "openvpn", "CACertificate.crt"))
+	if err != nil {
+		log.Printf("ERROR: %v", err.Error())
+	}
+	caBytes, err := ioutil.ReadAll(caFile)
+	t.auth = AuthDetails{Ca: string(toBase64(caBytes))}
 	return true
+
 }
 
 // Endpoints returns all the available endpoints.
-func (r *TunnelbearProvider) Endpoints() []*Endpoint {
-	if r.endpoints == nil {
+func (t *TunnelbearProvider) Endpoints() []*Endpoint {
+	if t.endpoints == nil {
 		return []*Endpoint{}
 	}
-	return r.endpoints
+	return t.endpoints
 }
 
 // AuthDetails returns valid authentication for this provider.
@@ -137,8 +147,8 @@ func extractCountryDomainsFromConfigFolder(path string) countryCodeDomainMap {
 		if words[0] != "remote" {
 			continue
 		}
-		domain := words[1]
-		port := words[2]
+		domain := strings.TrimSpace(words[1])
+		port := strings.TrimSpace(words[2])
 
 		cc := getCountryCodeFromSubdomain(domain)
 

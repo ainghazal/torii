@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	listeningPort    = ":8080"
-	enabledProviders = []string{"riseup"}
-	healthServiceMap = make(map[string]*health.HealthService)
+	listeningPort                   = ":8080"
+	providersWithEnabledHealthCheck = []string{"riseup"}
+	healthServiceMap                = make(map[string]*health.HealthService)
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 )
 
 func isEnabledProvider(name string) bool {
-	return hasItem(enabledProviders, name)
+	return hasItem(providersWithEnabledHealthCheck, name)
 }
 
 func hasItem(s []string, str string) bool {
